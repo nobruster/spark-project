@@ -9,3 +9,7 @@ logs/spark.log
 build/logs/
 
 build/config/spark/jars/iceberg-spark-runtime-3.5_2.12-1.9.1.jar
+
+.databricks
+
+.databricks
