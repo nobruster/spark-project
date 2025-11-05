@@ -89,8 +89,8 @@ change_metrics AS (
   SELECT
     cpf,
     COUNT(*) - 1 AS total_changes,
-    MAX(__START_AT) AS last_change_date,
-    DATEDIFF(day, MAX(__START_AT), current_date()) AS days_since_last_change
+    MAX(start_date) AS last_change_date,
+    DATEDIFF(day, MAX(start_date), current_date()) AS days_since_last_change
   FROM silver_users_history
   WHERE cpf IS NOT NULL
   GROUP BY cpf

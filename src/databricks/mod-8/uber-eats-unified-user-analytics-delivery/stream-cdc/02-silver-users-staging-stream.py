@@ -72,7 +72,8 @@ OUTPUT SCHEMA:
 """
 
 import dlt
-from pyspark.sql.functions import col, lit, coalesce, when
+from pyspark.sql.functions import col, lit, coalesce, when, current_timestamp, row_number
+from pyspark.sql.window import Window
 
 # ============================================================================
 # STREAMING TABLE: Unified CDC Events

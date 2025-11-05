@@ -111,6 +111,8 @@ PRODUCTION NOTES:
 """
 
 import dlt
+from pyspark.sql.functions import col, current_timestamp, count, window, struct
+from pyspark.sql.functions import max as spark_max, min as spark_min, avg
 
 # ============================================================================
 # SCD TYPE 1 - Current State Only (Streaming)
