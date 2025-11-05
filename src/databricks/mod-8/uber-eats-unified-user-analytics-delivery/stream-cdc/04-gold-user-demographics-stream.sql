@@ -1,75 +1,19 @@
--- GOLD LAYER - User Demographics for Business Intelligence
+-- GOLD LAYER - User Demographics for Real-time Business Intelligence
 --
 -- PURPOSE:
--- This module creates demographic insights for business intelligence and strategic planning.
--- It aggregates user profiles by multiple dimensions for executive dashboards and analytics.
+-- Creates demographic insights for real-time BI dashboards and strategic planning.
+-- Aggregates user profiles by multiple dimensions with continuous updates.
 --
--- WHAT IT DOES:
--- - Analyzes job distribution across users for market positioning
--- - Tracks user distribution by city for geographic expansion
--- - Provides data completeness metrics for data quality monitoring
--- - Calculates platform-wide statistics for executive reporting
---
--- DATA FLOW:
---   silver_users_unified (current state)
---     -> Job category extraction
---     -> Geographic aggregation
---     -> Data quality metrics
---     -> gold_user_demographics (BI dashboards)
---
--- WHY FROM SCD TYPE 1?
--- Business intelligence needs CURRENT snapshot:
--- - Executive dashboards show "as of today" metrics
--- - Strategic planning uses current user base size
--- - Geographic expansion decisions based on active users
--- - No need for temporal trends (use separate historical tables)
---
--- BUSINESS VALUE:
---
--- Job Distribution:
--- - Target B2B customers (Corporate, Executivo roles)
--- - Identify high-value professions (Arquiteto, Diretor)
--- - Tailor marketing messages by profession
---
--- Geographic Distribution:
--- - Resource allocation (customer support by city)
--- - Market penetration analysis (user count per city)
--- - Expansion opportunities (underserved cities)
---
--- Data Quality Monitoring:
--- - Profile completeness (% with email, name, birthday)
--- - Data enrichment opportunities (missing fields)
--- - CRM sync health (MongoDB vs MSSQL coverage)
---
--- KEY FEATURES:
--- - Job categorization: Extract role type from job field
--- - Geographic aggregation: City-level granularity
--- - Completeness metrics: Track null percentages
--- - Materialized view: Daily batch refresh
---
--- LEARNING OBJECTIVES:
--- - Design BI-ready aggregations for executives
--- - Extract categories from text fields (job parsing)
--- - Calculate data quality metrics
--- - Build demographic insights from user profiles
---
--- OUTPUT SCHEMA:
--- - city: Geographic dimension
--- - total_users: User count per city
--- - users_with_email: Email coverage metric
--- - users_with_birthday: Birthday coverage metric
--- - users_with_job: Job coverage metric
--- - top_job_category: Most common job type in city
--- - profile_completeness_pct: Overall data quality score
--- - avg_user_age: Demographic indicator
+-- PATTERN: Streaming Source → Live Table (Incremental Aggregations)
 
-CREATE OR REFRESH MATERIALIZED VIEW gold_user_demographics
-COMMENT 'User demographic analysis for business intelligence and strategic planning'
+CREATE OR REFRESH LIVE TABLE gold_user_demographics_stream
+COMMENT 'Real-time user demographic analysis for business intelligence and strategic planning'
 TBLPROPERTIES (
   'quality' = 'gold',
   'layer' = 'analytics',
   'use_case' = 'business_intelligence',
-  'refresh_schedule' = 'daily'
+  'pattern' = 'streaming_cdc_aggregation',
+  'pipelines.autoOptimize.managed' = 'true'
 )
 AS
 WITH user_metrics AS (
@@ -108,7 +52,7 @@ WITH user_metrics AS (
       THEN 1 ELSE 0
     END AS is_complete_profile
 
-  FROM silver_users_unified
+  FROM LIVE.silver_users_unified_stream  -- Read from streaming SCD Type 1
   WHERE cpf IS NOT NULL
 ),
 
@@ -165,3 +109,24 @@ SELECT
 
 FROM city_demographics
 ORDER BY total_users DESC;
+
+-- REAL-TIME BI VALUE:
+--
+-- Immediate Insights:
+-- - Dashboard refreshes as data changes
+-- - Data quality monitoring in real-time
+-- - Geographic expansion decisions with fresh data
+-- - Profile completeness tracked continuously
+--
+-- Executive Dashboards:
+-- - "As of now" metrics (not hours-old)
+-- - Real-time user base size
+-- - Live demographic distributions
+-- - Instant data quality alerts
+--
+-- Streaming Pattern:
+-- LIVE TABLE incrementally updates demographics as:
+-- - New users register (INSERT events)
+-- - Users update profiles (UPDATE events)
+-- - Users change cities (geographic shifts)
+-- - Data quality improves (more complete profiles)

@@ -102,6 +102,50 @@ TBLPROPERTIES (
   'delta.enableChangeDataFeed' = 'true'
 )
 AS
+WITH deduplicated_mongo AS (
+  -- Deduplicate MongoDB data: keep latest record per CPF
+  SELECT
+    cpf,
+    user_id,
+    uuid,
+    email,
+    delivery_address,
+    city,
+    phone_number,
+    country,
+    dt_current_timestamp,
+    ROW_NUMBER() OVER (
+      PARTITION BY cpf
+      ORDER BY
+        CAST(dt_current_timestamp AS TIMESTAMP) DESC NULLS LAST,
+        ingestion_timestamp DESC
+    ) AS rn
+  FROM bronze_mongodb_users
+  WHERE cpf IS NOT NULL
+),
+deduplicated_mssql AS (
+  -- Deduplicate MSSQL data: keep latest record per CPF
+  SELECT
+    cpf,
+    user_id,
+    uuid,
+    first_name,
+    last_name,
+    birthday,
+    job,
+    company_name,
+    phone_number,
+    country,
+    dt_current_timestamp,
+    ROW_NUMBER() OVER (
+      PARTITION BY cpf
+      ORDER BY
+        CAST(dt_current_timestamp AS TIMESTAMP) DESC NULLS LAST,
+        ingestion_timestamp DESC
+    ) AS rn
+  FROM bronze_mssql_users
+  WHERE cpf IS NOT NULL
+)
 SELECT
   -- Business key: CPF (Brazilian unified identifier) is the true user key
   COALESCE(mongo.cpf, mssql.cpf) AS cpf,
@@ -136,8 +180,12 @@ SELECT
 
   current_timestamp() AS processed_timestamp
 
-FROM bronze_mongodb_users AS mongo
-FULL OUTER JOIN bronze_mssql_users AS mssql
+FROM deduplicated_mongo AS mongo
+FULL OUTER JOIN deduplicated_mssql AS mssql
   ON mongo.cpf = mssql.cpf  -- Join on CPF (Brazilian business key), not user_id
-
-WHERE COALESCE(mongo.cpf, mssql.cpf) IS NOT NULL;
+  AND mongo.rn = 1
+  AND mssql.rn = 1
+WHERE
+  COALESCE(mongo.cpf, mssql.cpf) IS NOT NULL
+  AND (mongo.rn = 1 OR mongo.rn IS NULL)
+  AND (mssql.rn = 1 OR mssql.rn IS NULL);

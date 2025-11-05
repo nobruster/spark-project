@@ -101,7 +101,8 @@ import dlt
 # Use Case: Operational queries, marketing campaigns, customer support
 # Track History: Not applicable (Type 1 doesn't track history)
 
-dlt.create_streaming_table(
+# Define the target table structure (NOT streaming - batch CDC from MATERIALIZED VIEW)
+dlt.create_target_table(
     name="silver_users_unified",
     comment="Current state of unified user profiles - SCD Type 1 for operational queries",
     table_properties={
@@ -109,18 +110,25 @@ dlt.create_streaming_table(
         "layer": "curation",
         "scd_type": "1",
         "use_case": "operations",
-        "delta.enableChangeDataFeed": "true"
+        "delta.enableChangeDataFeed": "true",
+        "pipelines.autoOptimize.managed": "true"
     }
 )
 
+# Apply CDC changes from staging (batch mode)
 dlt.apply_changes(
     target="silver_users_unified",
     source="silver_users_staging",
     keys=["cpf"],
     sequence_by="dt_current_timestamp",
-    stored_as_scd_type="1"
-    # NOTE: track_history_column_list NOT used for Type 1
-    # Type 1 automatically overwrites ALL columns on UPDATE
+    stored_as_scd_type=1,
+    # Batch mode: process all available changes then stop
+    # Aligns with MATERIALIZED VIEW refresh pattern
+    ignore_null_updates=False,
+    apply_as_deletes=None,  # No explicit delete logic (batch snapshot pattern)
+    apply_as_truncates=None,
+    column_list=None,  # Track all columns for Type 1
+    except_column_list=["processed_timestamp"]  # Exclude metadata timestamp
 )
 
 # ============================================================================
@@ -131,7 +139,8 @@ dlt.apply_changes(
 # Use Case: LGPD/GDPR compliance, audit trails, historical analysis
 # Track History: Explicitly lists columns that trigger new versions
 
-dlt.create_streaming_table(
+# Define the target table structure (NOT streaming - batch CDC from MATERIALIZED VIEW)
+dlt.create_target_table(
     name="silver_users_history",
     comment="Complete change history of user profiles - SCD Type 2 for audit and compliance (LGPD/GDPR)",
     table_properties={
@@ -139,16 +148,19 @@ dlt.create_streaming_table(
         "layer": "curation",
         "scd_type": "2",
         "use_case": "compliance_audit",
-        "delta.enableChangeDataFeed": "true"
+        "delta.enableChangeDataFeed": "true",
+        "pipelines.autoOptimize.managed": "true"
     }
 )
 
+# Apply CDC changes with full history tracking
 dlt.apply_changes(
     target="silver_users_history",
     source="silver_users_staging",
     keys=["cpf"],
     sequence_by="dt_current_timestamp",
-    stored_as_scd_type="2",
+    stored_as_scd_type=2,
+    # Track specific columns for versioning (field-level change detection)
     track_history_column_list=[
         "email",           # Track email changes (LGPD/GDPR requirement)
         "delivery_address", # Track address changes (PII tracking)
@@ -157,8 +169,13 @@ dlt.apply_changes(
         "last_name",       # Track name changes (identity verification)
         "job",             # Track job changes (demographic analysis)
         "company_name"     # Track company changes (B2B insights)
-    ]
-    # NOTE: track_history_column_list ONLY for Type 2
-    # When any of these columns change, a new version is created
-    # Other columns (user_id, uuid, phone_number, country) still stored but don't trigger versioning
+    ],
+    # Batch mode configuration
+    ignore_null_updates=False,
+    apply_as_deletes=None,  # No explicit delete column (snapshot-based)
+    apply_as_truncates=None,
+    except_column_list=["processed_timestamp"]  # Exclude metadata from versioning
+    # NOTE: SCD Type 2 automatically adds __START_AT, __END_AT, __CURRENT columns
+    # __END_AT IS NULL indicates current/active version
+    # __END_AT IS NOT NULL indicates historical/superseded version
 )
