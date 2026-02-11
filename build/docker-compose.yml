@@ -1,3 +1,5 @@
+version: '3.5'
+
 services:
 
   # Spark Master
@@ -14,7 +16,7 @@ services:
       - SPARK_LOG_CONF=/opt/bitnami/spark/conf/log4j2.properties
       - PYTHONPATH=/opt/bitnami/spark/jobs/app:/opt/bitnami/spark/jobs/app/
     ports:
-      - "8080:8080"
+      - "8081:8080"
     volumes:
       - ${APP_SRC_PATH}:/opt/bitnami/spark/jobs
       - ${APP_STORAGE_PATH}:/opt/bitnami/spark/storage
@@ -107,6 +109,33 @@ services:
     volumes:
       - ${APP_LOG_PATH}:/opt/bitnami/spark/logs/events
       - ${APP_METRICS_PATH}:/opt/bitnami/spark/metrics
+    depends_on:
+      - spark-master
+      - spark-worker-1
+      - spark-worker-2
+      - spark-worker-3
+
+  # Jupyter Notebook (PySpark)
+  jupyter-notebook:
+    container_name: jupyter-notebook
+    image: owshq-spark:3.5
+    environment:
+      - SPARK_RPC_AUTHENTICATION_ENABLED=no
+      - SPARK_RPC_ENCRYPTION_ENABLED=no
+      - SPARK_LOCAL_STORAGE_ENCRYPTION_ENABLED=no
+      - SPARK_SSL_ENABLED=no
+      - SPARK_USER=spark
+      - PYTHONPATH=/opt/bitnami/spark/jobs/app:/opt/bitnami/spark/jobs/app/
+    ports:
+      - "8888:8888"
+      - "4041:4040"
+    volumes:
+      - ${APP_SRC_PATH}:/opt/bitnami/spark/jobs
+      - ${APP_STORAGE_PATH}:/opt/bitnami/spark/storage
+      - ${APP_LOG_PATH}:/opt/bitnami/spark/logs/events
+      - ${APP_METRICS_PATH}:/opt/bitnami/spark/metrics
+    entrypoint: []
+    command: ["jupyter", "notebook", "--ip=0.0.0.0", "--port=8888", "--no-browser", "--allow-root", "--NotebookApp.token=", "--notebook-dir=/opt/bitnami/spark/jobs"]
     depends_on:
       - spark-master
       - spark-worker-1
